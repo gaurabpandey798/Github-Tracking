@@ -1,0 +1,10 @@
+# Local development configuration overrides
+spring:
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.ideax.codemonitor: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web: INFO

@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: ideax-code-monitor
+  jackson:
+    serialization:
+      fail-on-empty-beans: false
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/ideax_codemonitor?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:G@ur@b12}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+server:
+  port: ${PORT:8085}
+
+github:
+  api:
+    base-url: ${GITHUB_API_URL:https://api.github.com}
+    version: ${GITHUB_API_VERSION:2022-11-28}
+  organization: ${GITHUB_ORGANIZATION:MBMC-IdeaX}
+  token: ${GITHUB_TOKEN:}
+  webhook:
+    secret: ${GITHUB_WEBHOOK_SECRET:}
+
+monitoring:
+  large-commit:
+    files-threshold: ${MONITORING_LARGE_COMMIT_FILES:100}
+    lines-threshold: ${MONITORING_LARGE_COMMIT_LINES:5000}
+  sudden-activity:
+    commits-threshold: ${MONITORING_SUDDEN_COMMITS:10}
+    window-minutes: ${MONITORING_SUDDEN_WINDOW_MINUTES:15}
+  bulk-change:
+    files-factor: ${MONITORING_BULK_FILES_FACTOR:3.0}
+
+security:
+  admin:
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:admin123}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method
