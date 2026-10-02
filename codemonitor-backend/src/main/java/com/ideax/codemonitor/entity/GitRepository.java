@@ -60,4 +60,14 @@ public class GitRepository {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("teamId")
+    public Long getTeamId() {
+        return team != null ? team.getId() : null;
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("teamNumber")
+    public Integer getTeamNumber() {
+        return team != null ? team.getTeamNumber() : null;
+    }
 }

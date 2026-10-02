@@ -63,6 +63,9 @@ public class GithubWebhookController {
         } else if ("pull_request".equalsIgnoreCase(event)) {
             webhookService.processPullRequestEvent(payloadJson);
             webhookService.recordDelivery(deliveryId, event);
+        } else if ("member".equalsIgnoreCase(event)) {
+            webhookService.processMemberEvent(payloadJson);
+            webhookService.recordDelivery(deliveryId, event);
         } else {
             log.info("Ignoring unhandled event type: {}", event);
             webhookService.recordDelivery(deliveryId, event);

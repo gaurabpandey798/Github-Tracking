@@ -5,11 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ideax.codemonitor.entity.*;
 import com.ideax.codemonitor.repository.*;
 import com.ideax.codemonitor.service.AuditLogService;
+import com.ideax.codemonitor.service.ParticipantService;
 import com.ideax.codemonitor.service.UnusualActivityDetectionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -264,6 +266,87 @@ public class WebhookService {
             }
         } catch (Exception e) {
             log.error("Failed to parse pull request webhook payload", e);
+        }
+    }
+
+    @Transactional
+    public void processMemberEvent(String payloadJson) {
+        try {
+            JsonNode root = objectMapper.readTree(payloadJson);
+            String action = root.path("action").asText();
+            if (!"added".equalsIgnoreCase(action)) {
+                log.info("Ignoring member event with action: {}", action);
+                return;
+            }
+
+            JsonNode memberNode = root.path("member");
+            JsonNode repoNode = root.path("repository");
+
+            String username = memberNode.path("login").asText();
+            Long githubUserId = memberNode.has("id") ? memberNode.get("id").asLong() : null;
+            long githubRepoId = repoNode.path("id").asLong();
+            String repoFullName = repoNode.path("full_name").asText();
+
+            if (!StringUtils.hasText(username)) {
+                log.warn("Member event missing member username");
+                return;
+            }
+
+            if (ParticipantService.isIgnoredUsername(username)) {
+                log.info("Ignoring admin/organizer member event for: {}", username);
+                return;
+            }
+
+            Optional<GitRepository> repoOpt = gitRepositoryRepository.findByGithubRepositoryId(githubRepoId);
+            if (repoOpt.isEmpty()) {
+                repoOpt = gitRepositoryRepository.findByFullNameIgnoreCase(repoFullName);
+            }
+
+            if (repoOpt.isEmpty()) {
+                log.warn("Member event received for unmonitored repository: {}", repoFullName);
+                return;
+            }
+
+            GitRepository repo = repoOpt.get();
+            Team team = repo.getTeam();
+            if (team == null) {
+                log.warn("Repository {} has no associated team", repoFullName);
+                return;
+            }
+
+            Optional<Participant> existing = participantRepository.findByGithubUsernameIgnoreCase(username);
+            if (existing.isPresent()) {
+                log.info("Member {} already registered in Team {}", username, existing.get().getTeam().getTeamNumber());
+                return;
+            }
+
+            Participant participant = Participant.builder()
+                    .team(team)
+                    .githubUsername(username)
+                    .displayName(username)
+                    .githubUserId(githubUserId)
+                    .role("MEMBER")
+                    .status("REGISTERED")
+                    .build();
+
+            Participant saved = participantRepository.save(participant);
+            commitRepository.linkParticipantToExistingCommits(team.getId(), username, saved);
+
+            auditLogService.logAction(
+                    AuditLog.AuditAction.PARTICIPANT_REGISTERED,
+                    "github-webhook",
+                    null,
+                    team.getId(),
+                    repo.getId(),
+                    null,
+                    String.format("Auto-enrolled member '%s' via GitHub member event into Team %02d", username, team.getTeamNumber()),
+                    String.format("{\"participantId\":%d,\"username\":\"%s\",\"teamId\":%d,\"source\":\"WEBHOOK_MEMBER_ADDED\"}",
+                            saved.getId(), username, team.getId())
+            );
+
+            log.info("Successfully auto-enrolled member {} into Team {}", username, team.getTeamNumber());
+        } catch (Exception ex) {
+            log.error("Failed to process member webhook event: {}", ex.getMessage(), ex);
         }
     }
 

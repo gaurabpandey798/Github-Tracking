@@ -24,10 +24,10 @@ public class Participant {
     @JoinColumn(name = "team_id", nullable = false)
     private Team team;
 
-    @Column(name = "github_user_id", nullable = false)
+    @Column(name = "github_user_id")
     private Long githubUserId;
 
-    @Column(name = "github_username", nullable = false, length = 100)
+    @Column(name = "github_username", nullable = false, unique = true, length = 100)
     private String githubUsername;
 
     @Column(name = "display_name", length = 150)
@@ -39,7 +39,7 @@ public class Participant {
 
     @Column(nullable = false, length = 30)
     @Builder.Default
-    private String status = "ACTIVE";
+    private String status = "REGISTERED";
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

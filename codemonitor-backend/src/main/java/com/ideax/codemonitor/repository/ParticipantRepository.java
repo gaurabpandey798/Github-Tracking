@@ -13,4 +13,6 @@ public interface ParticipantRepository extends JpaRepository<Participant, Long> 
     Optional<Participant> findByTeamIdAndGithubUsernameIgnoreCase(Long teamId, String githubUsername);
     Optional<Participant> findByTeamIdAndGithubUserId(Long teamId, Long githubUserId);
     boolean existsByTeamIdAndGithubUsernameIgnoreCase(Long teamId, String githubUsername);
+    Optional<Participant> findByGithubUsernameIgnoreCase(String githubUsername);
+    boolean existsByGithubUsernameIgnoreCase(String githubUsername);
 }

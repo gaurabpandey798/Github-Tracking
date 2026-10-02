@@ -1,5 +1,6 @@
 package com.ideax.codemonitor.controller;
 
+import com.ideax.codemonitor.dto.RegisterRepositoryRequest;
 import com.ideax.codemonitor.dto.RepositorySyncResponse;
 import com.ideax.codemonitor.entity.GitRepository;
 import com.ideax.codemonitor.github.GithubProperties;
@@ -8,6 +9,8 @@ import com.ideax.codemonitor.repository.GitRepositoryRepository;
 import com.ideax.codemonitor.service.CommitSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -37,6 +40,14 @@ public class AdminRepositoryController {
     @Operation(summary = "List all tracked repositories", description = "Retrieves all registered team repositories.")
     public ResponseEntity<List<GitRepository>> listRepositories() {
         return ResponseEntity.ok(gitRepositoryRepository.findAll());
+    }
+
+    @PostMapping
+    @Operation(summary = "Register a team GitHub repository",
+               description = "Validates team exists, verifies repository on GitHub, checks duplicate protection, and links repository with team.")
+    public ResponseEntity<GitRepository> registerRepository(@Valid @RequestBody RegisterRepositoryRequest request) {
+        GitRepository repository = githubRepositoryService.registerRepository(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(repository);
     }
 
     @PostMapping("/{repositoryId}/sync")

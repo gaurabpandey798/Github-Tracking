@@ -5,6 +5,8 @@ import com.ideax.codemonitor.exception.ResourceNotFoundException;
 import com.ideax.codemonitor.github.dto.GithubBranchDto;
 import com.ideax.codemonitor.github.dto.GithubCommitDto;
 import com.ideax.codemonitor.github.dto.GithubRepoDto;
+import com.ideax.codemonitor.github.dto.GithubTeamDto;
+import com.ideax.codemonitor.github.dto.GithubUserDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +20,7 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -84,10 +87,11 @@ public class GithubClient {
                     })
                     .body(GithubRepoDto.class);
             return Optional.ofNullable(response);
-        } catch (HttpClientErrorException.NotFound ex) {
-            log.warn("GitHub repository not found: {}/{}", owner, repo);
-            return Optional.empty();
         } catch (HttpClientErrorException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                log.warn("GitHub repository not found: {}/{}", owner, repo);
+                return Optional.empty();
+            }
             log.error("GitHub client error fetching repo {}/{}: HTTP {}", owner, repo, ex.getStatusCode());
             throw new GitHubApiException("Failed to fetch GitHub repository " + owner + "/" + repo + ": " + ex.getMessage(), ex);
         } catch (HttpServerErrorException ex) {
@@ -96,6 +100,26 @@ public class GithubClient {
         } catch (Exception ex) {
             log.error("Unexpected error fetching repo {}/{}: {}", owner, repo, ex.getMessage());
             throw new GitHubApiException("Failed to communicate with GitHub API: " + ex.getMessage(), ex);
+        }
+    }
+
+    public Optional<Long> getUserIdByUsername(String username) {
+        try {
+            log.info("Fetching GitHub user info for: {}", username);
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/users/{username}", username)
+                    .retrieve()
+                    .toEntity(String.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                JsonNode node = objectMapper.readTree(response.getBody());
+                if (node.has("id")) {
+                    return Optional.of(node.get("id").asLong());
+                }
+            }
+            return Optional.empty();
+        } catch (Exception ex) {
+            log.warn("Could not resolve GitHub user ID for {}: {}", username, ex.getMessage());
+            return Optional.empty();
         }
     }
 
@@ -201,4 +225,135 @@ public class GithubClient {
             throw new GitHubApiException("Failed to fetch commit " + sha + " for " + owner + "/" + repo, ex);
         }
     }
+
+    public List<GithubTeamDto> listTeams(String org) {
+        try {
+            log.info("Listing GitHub teams for organization: {}", org);
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/orgs/{org}/teams?per_page=100", org)
+                    .retrieve()
+                    .toEntity(String.class);
+
+            String body = response.getBody();
+            if (body == null || body.isBlank() || body.trim().startsWith("{")) {
+                return Collections.emptyList();
+            }
+            return objectMapper.readValue(body, new TypeReference<List<GithubTeamDto>>() {});
+        } catch (Exception ex) {
+            log.error("Error listing teams for org {}: {}", org, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public List<GithubRepoDto> listTeamRepositories(String org, String teamSlug) {
+        try {
+            log.info("Listing repositories for team {}/{}", org, teamSlug);
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/orgs/{org}/teams/{teamSlug}/repos?per_page=100", org, teamSlug)
+                    .retrieve()
+                    .toEntity(String.class);
+
+            String body = response.getBody();
+            if (body == null || body.isBlank() || body.trim().startsWith("{")) {
+                return Collections.emptyList();
+            }
+            return objectMapper.readValue(body, new TypeReference<List<GithubRepoDto>>() {});
+        } catch (Exception ex) {
+            log.error("Error listing repositories for team {}/{}: {}", org, teamSlug, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public List<GithubUserDto> listTeamMembers(String org, String teamSlug) {
+        try {
+            log.info("Listing members for team {}/{}", org, teamSlug);
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/orgs/{org}/teams/{teamSlug}/members?per_page=100", org, teamSlug)
+                    .retrieve()
+                    .toEntity(String.class);
+
+            String body = response.getBody();
+            if (body == null || body.isBlank() || body.trim().startsWith("{")) {
+                return Collections.emptyList();
+            }
+            return objectMapper.readValue(body, new TypeReference<List<GithubUserDto>>() {});
+        } catch (Exception ex) {
+            log.error("Error listing members for team {}/{}: {}", org, teamSlug, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public Optional<GithubUserDto> getUser(String username) {
+        try {
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/users/{username}", username)
+                    .retrieve()
+                    .toEntity(String.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.ofNullable(objectMapper.readValue(response.getBody(), GithubUserDto.class));
+            }
+            return Optional.empty();
+        } catch (Exception ex) {
+            log.debug("Error fetching GitHub user {}: {}", username, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    public List<GithubUserDto> listOrgMembers(String org) {
+        try {
+            log.info("Listing members for organization: {}", org);
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/orgs/{org}/members?per_page=100", org)
+                    .retrieve()
+                    .toEntity(String.class);
+
+            String body = response.getBody();
+            if (body == null || body.isBlank() || body.trim().startsWith("{")) {
+                return Collections.emptyList();
+            }
+            return objectMapper.readValue(body, new TypeReference<List<GithubUserDto>>() {});
+        } catch (Exception ex) {
+            log.error("Error listing members for org {}: {}", org, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public List<JsonNode> listUserOrgEvents(String username, String org) {
+        try {
+            log.info("Listing org events for user {} in org {}", username, org);
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/users/{username}/events/orgs/{org}?per_page=100", username, org)
+                    .retrieve()
+                    .toEntity(String.class);
+
+            String body = response.getBody();
+            if (body == null || body.isBlank() || body.trim().startsWith("{")) {
+                return Collections.emptyList();
+            }
+            return objectMapper.readValue(body, new TypeReference<List<JsonNode>>() {});
+        } catch (Exception ex) {
+            log.error("Error listing org events for user {} in {}: {}", username, org, ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    public Optional<String> getAuthenticatedUsername() {
+        try {
+            ResponseEntity<String> response = restClient.get()
+                    .uri("/user")
+                    .retrieve()
+                    .toEntity(String.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                JsonNode node = objectMapper.readTree(response.getBody());
+                if (node.has("login")) {
+                    return Optional.of(node.get("login").asText());
+                }
+            }
+            return Optional.empty();
+        } catch (Exception ex) {
+            log.debug("Error fetching authenticated GitHub username: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
 }
+
